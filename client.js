@@ -28,6 +28,7 @@ const done = Buffer.from('\0')
 const chunkSize = 2048*4
 
 let buffer = Buffer.alloc(0)
+let messagesCount = 0
 let metadata
 
 console.log('input', inputFile)
@@ -69,8 +70,11 @@ socket.on('message', (msg, info) => {
 		sendPng(buffer)
 		writePng(buffer)
 
+		messagesCount = 0
 		buffer = Buffer.alloc(0)
 	} else {
+		messagesCount += 1
+		console.log('received %d messages', messagesCount)
 		buffer = Buffer.concat([buffer, msg])
 	}
 })
