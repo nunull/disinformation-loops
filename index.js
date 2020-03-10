@@ -18,6 +18,8 @@ const remoteAddress = getenv('REMOTE_ADDRESS')
 const sendOrdered = getenv('SEND_ORDERED', { bool: true })
 const throttleTimeout = getenv('TIMEOUT', { optional: true })
 const doneTimeout = getenv('DONE_TIMEOUT', { optional: true }) || 0
+const chunkSize = parseInt(getenv('CHUNK_SIZE', { optional: true }) || 2048)
+const debug = getenv('DEBUG', { bool: true })
 
 const outputFile = 'data/result.png'
 
@@ -25,11 +27,10 @@ const inputFile = process.argv.length !== 3 ? null : process.argv[process.argv.l
 
 const socket = udp.createSocket('udp4')
 
-const chunkSize = 2048*4
-
 let buffer = Buffer.alloc(0)
 let messagesReceivedCount = 0
 let messagesSentCount = 0
+let roundtripCount = 0
 let metadata
 
 console.log('input', inputFile)
@@ -42,6 +43,7 @@ console.log('send ordered', sendOrdered)
 console.log('chunk size', chunkSize)
 console.log('throttle timeout', throttleTimeout)
 console.log('done timeout', doneTimeout)
+console.log('debug', debug)
 
 const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
@@ -62,10 +64,32 @@ const controlServer = http.createServer((req, res) => {
 		})
 	} else if (req.method === 'POST' && url.pathname === '/done') {
 		handleDone()
+	} else if (req.method === 'GET' && url.pathname === '/') {
+		res.writeHead(200, {
+			'Content-Type': 'text/html'
+		})
+		res.write(`<meta http-equiv="refresh" content="5"><p>${roundtripCount} roundtrips</p><img src="/image.png">`)
+		res.end()
+	} else if (req.method === 'GET' && url.pathname === '/image.png') {
+		fs.readFile(outputFile, (err, data) => {
+			if (err) {
+				res.writeHead(404)
+				res.end()
+				console.log('error reading %s', outputFile)
+				return
+			}
+
+			res.writeHead(200)
+			res.write(data)
+			res.end()
+		})
 	}
 })
 
-controlServer.listen(controlPort, () => { console.log('control server listening on %s', controlPort) })
+controlServer.listen(controlPort, () => {
+	console.log('control server listening on %s', controlPort)
+	console.log('visit http://localhost:%s', controlPort)
+})
 
 socket.on('message', (msg, info) => { handleChunk(msg) })
 socket.on('listening', () => { console.log('listening on %s', port) })
@@ -83,7 +107,7 @@ if (inputFile) {
 
 function handleChunk (chunk) {
 	messagesReceivedCount += 1
-	console.log('received %d chunks', messagesReceivedCount)
+	if (debug) console.log('received %d chunks', messagesReceivedCount)
 	buffer = Buffer.concat([buffer, chunk])
 }
 
@@ -104,7 +128,7 @@ function sendChunk (chunk, callback) {
 	})
 
 	messagesSentCount += 1
-	console.log('sent %d chunks', messagesSentCount)
+	if (debug) console.log('sent %d chunks', messagesSentCount)
 }
 
 function sendDone () {
@@ -150,6 +174,8 @@ function writePng (imageData) {
 
 	console.log('writing %s', outputFile)
 	fs.writeFileSync(outputFile, pngBuffer)
+
+	roundtripCount += 1
 }
 
 function sendPng (imageData) {
