@@ -17,6 +17,7 @@ const remoteControlPort = getenv('REMOTE_CONTROL_PORT')
 const remoteAddress = getenv('REMOTE_ADDRESS')
 const sendOrdered = getenv('SEND_ORDERED', { bool: true })
 const throttleTimeout = getenv('TIMEOUT', { optional: true })
+const doneTimeout = getenv('DONE_TIMEOUT', { optional: true }) || 0
 
 const outputFile = 'data/result.png'
 
@@ -24,7 +25,7 @@ const inputFile = process.argv.length !== 3 ? null : process.argv[process.argv.l
 
 const socket = udp.createSocket('udp4')
 
-// const done = Buffer.from('\0')
+const doneTimeout = 2000
 const chunkSize = 2048*4
 
 let buffer = Buffer.alloc(0)
@@ -41,6 +42,7 @@ console.log('remote address', remoteAddress)
 console.log('send ordered', sendOrdered)
 console.log('chunk size', chunkSize)
 console.log('throttle timeout', throttleTimeout)
+console.log('done timeout', doneTimeout)
 
 const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
@@ -66,35 +68,24 @@ const controlServer = http.createServer((req, res) => {
 
 controlServer.listen(controlPort, () => { console.log('control server listening on %s', controlPort) })
 
-socket.on('message', (msg, info) => {
-	// if (msg.compare(done) === 0) {
-	// 	// handleDone()
-	// 	// console.log('done')
-
-	// 	// sendPng(buffer)
-	// 	// writePng(buffer)
-
-	// 	// messagesReceivedCount = 0
-	// 	// buffer = Buffer.alloc(0)
-	// } else {
-		handleChunk(msg)
-		// messagesReceivedCount += 1
-		// console.log('received %d messages', messagesReceivedCount)
-		// buffer = Buffer.concat([buffer, msg])
-	// }
-})
+socket.on('message', (msg, info) => { handleChunk(msg) })
+socket.on('listening', () => { console.log('listening on %s', port) })
+socket.on('close', () => { console.log('socket closed') })
 socket.on('error', err => {
 	console.log('socker error', err)
 	socket.close()
 })
-
-socket.on('listening', () => { console.log('listening on %s', port) })
-socket.on('close', () => { console.log('socket closed') })
 socket.bind(port)
 
 if (inputFile) {
 	const imageData = readPng(inputFile)
 	sendPng(imageData)
+}
+
+function handleChunk (chunk) {
+	messagesReceivedCount += 1
+	console.log('received %d chunks', messagesReceivedCount)
+	buffer = Buffer.concat([buffer, chunk])
 }
 
 function handleDone () {
@@ -107,10 +98,28 @@ function handleDone () {
 	buffer = Buffer.alloc(0)
 }
 
-function handleChunk (chunk) {
-	messagesReceivedCount += 1
-	console.log('received %d chunks', messagesReceivedCount)
-	buffer = Buffer.concat([buffer, chunk])
+function sendChunk (chunk, callback) {
+	socket.send(chunk, remotePort, remoteAddress, err => {
+		if (err) console.log('send chunk error', err)
+		if (callback) callback(err)
+	})
+
+	messagesSentCount += 1
+	console.log('sent %d chunks', messagesSentCount)
+}
+
+function sendDone () {
+	console.log('waiting %d ms to send done', doneTimeout)
+
+	setTimeout(() => {
+		const req = http.request(`http://${remoteAddress}:${remoteControlPort}/done`, {
+			method: 'POST'
+		})
+		req.end()
+
+		messagesSentCount = 0
+		console.log('done')
+	}, doneTimeout)	
 }
 
 function readPng (file) {
@@ -203,35 +212,5 @@ function sendPngOrdered (imageData) {
 
 			sendNextChunk(i + chunkSize)
 		})
-
-		// socket.send(chunk, remotePort, remoteAddress, err => {
-		// 	messagesSentCount += 1
-		// 	console.log('sent %d messages', messagesSentCount)
-
-			
-		// })
 	}
-}
-
-function sendChunk (chunk, callback) {
-	socket.send(chunk, remotePort, remoteAddress, err => {
-		if (err) console.log('send chunk error', err)
-		if (callback) callback(err)
-	})
-
-	messagesSentCount += 1
-	console.log('sent %d messages', messagesSentCount)
-}
-
-function sendDone () {
-	const req = http.request(`http://${remoteAddress}:${remoteControlPort}/done`, {
-		method: 'POST'
-	})
-	req.end()
-
-	// socket.send(done, remotePort, remoteAddress, err => {
-	// 	if (err) console.log('send done error', err)
-	// })
-	messagesSentCount = 0
-	console.log('done')
 }
