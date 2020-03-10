@@ -24,11 +24,12 @@ const inputFile = process.argv.length !== 3 ? null : process.argv[process.argv.l
 
 const socket = udp.createSocket('udp4')
 
-const done = Buffer.from('\0')
+// const done = Buffer.from('\0')
 const chunkSize = 2048*4
 
 let buffer = Buffer.alloc(0)
-let messagesCount = 0
+let messagesReceivedCount = 0
+let messagesSentCount = 0
 let metadata
 
 console.log('input', inputFile)
@@ -45,38 +46,42 @@ const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
 	console.log('request %s %s', req.method, url.pathname)
 
-	if (req.method !== 'POST' || url.pathname !== '/metadata') return
+	if (req.method === 'POST' && url.pathname === '/metadata') {
+		let body = []
+		req.on('data', (chunk) => {
+			body.push(chunk)
+		}).on('end', () => {
+			body = Buffer.concat(body).toString()
 
-	let body = []
-	req.on('data', (chunk) => {
-		body.push(chunk)
-	}).on('end', () => {
-		body = Buffer.concat(body).toString()
-
-		metadata = JSON.parse(body)
-		console.log('metadata', metadata)
-	  
-	  	res.writeHead(200)
-		res.end()
-	})
+			metadata = JSON.parse(body)
+			console.log('metadata', metadata)
+		  
+		  	res.writeHead(200)
+			res.end()
+		})
+	} else if (req.method === 'POST' && url.pathname === '/done') {
+		handleDone()
+	}
 })
 
 controlServer.listen(controlPort, () => { console.log('control server listening on %s', controlPort) })
 
 socket.on('message', (msg, info) => {
-	if (msg.compare(done) === 0) {
-		console.log('done')
+	// if (msg.compare(done) === 0) {
+	// 	// handleDone()
+	// 	// console.log('done')
 
-		sendPng(buffer)
-		writePng(buffer)
+	// 	// sendPng(buffer)
+	// 	// writePng(buffer)
 
-		messagesCount = 0
-		buffer = Buffer.alloc(0)
-	} else {
-		messagesCount += 1
-		console.log('received %d messages', messagesCount)
-		buffer = Buffer.concat([buffer, msg])
-	}
+	// 	// messagesReceivedCount = 0
+	// 	// buffer = Buffer.alloc(0)
+	// } else {
+		handleChunk(msg)
+		// messagesReceivedCount += 1
+		// console.log('received %d messages', messagesReceivedCount)
+		// buffer = Buffer.concat([buffer, msg])
+	// }
 })
 socket.on('error', err => {
 	console.log('socker error', err)
@@ -90,6 +95,22 @@ socket.bind(port)
 if (inputFile) {
 	const imageData = readPng(inputFile)
 	sendPng(imageData)
+}
+
+function handleDone () {
+	console.log('done')
+
+	writePng(buffer)
+	sendPng(buffer)
+
+	messagesReceivedCount = 0
+	buffer = Buffer.alloc(0)
+}
+
+function handleChunk (chunk) {
+	messagesReceivedCount += 1
+	console.log('received %d chunks', messagesReceivedCount)
+	buffer = Buffer.concat([buffer, chunk])
 }
 
 function readPng (file) {
@@ -107,7 +128,6 @@ function readPng (file) {
 	})
 	req.write(JSON.stringify(metadata))
 	req.end()
-	// fs.writeFileSync('meta.json', JSON.stringify(metadata))
 
 	return image.data
 }
@@ -139,15 +159,10 @@ function sendPng (imageData) {
 function sendPngSimple (imageData) {
 	for (let i = 0; i < imageData.length; i += chunkSize) {
 		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
-		socket.send(chunk, remotePort, remoteAddress, err => {
-			if (err) console.log('send error', err)
-		})
+		sendChunk(chunk)
 	}
 
-	socket.send(done, remotePort, remoteAddress, err => {
-		if (err) console.log('send error', err)
-	})
-	console.log('done')
+	sendDone()
 }
 
 function sendPngThrottled (imageData) {
@@ -157,15 +172,11 @@ function sendPngThrottled (imageData) {
 
 	function sendNextChunk (i) {
 		if (i >= imageData.length) {
-			console.log('done')
-			socket.send(done, remotePort, remoteAddress)
-			return
+			return sendDone()
 		}
 
 		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
-		socket.send(chunk, remotePort, remoteAddress, err => {
-			if (err) console.log('error', i, err)
-		})
+		sendChunk(chunk)
 
 		setTimeout(() => {
 			sendNextChunk(i + chunkSize)
@@ -180,21 +191,47 @@ function sendPngOrdered (imageData) {
 
 	function sendNextChunk (i) {
 		if (i >= imageData.length) {
-			console.log('done')
-			socket.send(done, remotePort, remoteAddress)
-			return
+			return sendDone()
 		}
 
 		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
-		socket.send(chunk, remotePort, remoteAddress, err => {
+		sendChunk(chunk, err => {
 			if (err) {
-				sendNextChunk(i)
 				console.log('error', i, err)
+				sendNextChunk(i)
 			}
 
 			sendNextChunk(i + chunkSize)
 		})
+
+		// socket.send(chunk, remotePort, remoteAddress, err => {
+		// 	messagesSentCount += 1
+		// 	console.log('sent %d messages', messagesSentCount)
+
+			
+		// })
 	}
 }
 
+function sendChunk (chunk, callback) {
+	socket.send(chunk, remotePort, remoteAddress, err => {
+		if (err) console.log('send chunk error', err)
+		if (callback) callback(err)
+	})
 
+	messagesSentCount += 1
+	console.log('sent %d messages', messagesSentCount)
+}
+
+function sendDone () {
+	const req = http.request(`http://${remoteAddress}:${remoteControlPort}/done`, {
+		method: 'POST'
+	})
+	req.end()
+
+	// socket.send(done, remotePort, remoteAddress, err => {
+	// 	if (err) console.log('send done error', err)
+	// })
+	messagesSentCount = 0
+	console.log('done')
+}
