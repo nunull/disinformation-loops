@@ -25,7 +25,6 @@ const inputFile = process.argv.length !== 3 ? null : process.argv[process.argv.l
 
 const socket = udp.createSocket('udp4')
 
-const doneTimeout = 2000
 const chunkSize = 2048*4
 
 let buffer = Buffer.alloc(0)
