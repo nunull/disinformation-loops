@@ -2,28 +2,10 @@ const udp = require('dgram')
 const http = require('http')
 const fs = require('fs')
 const png = require('@vivaxy/png')
-
-function getenv (name, opts = { bool: false, optional: false }) {
-	const value = process.env[name]
-	if (opts.bool) return value === '1' || value === 'true'
-	if (!opts.optional && !value) throw new Error(`missing ${name}`)
-	return value
-}
-
-const port = getenv('PORT')
-const controlPort = getenv('CONTROL_PORT')
-const remotePort = getenv('REMOTE_PORT')
-const remoteControlPort = getenv('REMOTE_CONTROL_PORT')
-const remoteAddress = getenv('REMOTE_ADDRESS')
-const sendOrdered = getenv('SEND_ORDERED', { bool: true })
-const throttleTimeout = getenv('TIMEOUT', { optional: true })
-const doneTimeout = getenv('DONE_TIMEOUT', { optional: true }) || 0
-const chunkSize = parseInt(getenv('CHUNK_SIZE', { optional: true }) || 2048)
-const debug = getenv('DEBUG', { bool: true })
+const { port, controlPort, remotePort, remoteControlPort, remoteAddress, sendOrdered,
+	throttleTimeout, doneTimeout, chunkSize, inputFile, debug } = require('./config')
 
 const outputFile = 'data/result.png'
-
-const inputFile = process.argv.length !== 3 ? null : process.argv[process.argv.length - 1]
 
 const socket = udp.createSocket('udp4')
 
@@ -33,17 +15,20 @@ let messagesSentCount = 0
 let roundtripCount = 0
 let metadata
 
-console.log('input', inputFile)
-console.log('output', outputFile)
-console.log('port', port)
-console.log('control port', controlPort)
-console.log('remote port', remotePort)
-console.log('remote address', remoteAddress)
-console.log('send ordered', sendOrdered)
-console.log('chunk size', chunkSize)
-console.log('throttle timeout', throttleTimeout)
-console.log('done timeout', doneTimeout)
-console.log('debug', debug)
+function getIndexHtml () {
+	return `<!DOCTYPE html>
+		<html>
+			<head>
+				<meta http-equiv="refresh" content="5">
+			</head>
+			<body>
+				<center>
+					<p>${roundtripCount} roundtrip${roundtripCount !== 1 ? 's' : ''}</p>
+					<img src="/image.png">
+				</center>
+			</body>
+		</html>`
+}
 
 const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
@@ -70,7 +55,7 @@ const controlServer = http.createServer((req, res) => {
 		res.writeHead(200, {
 			'Content-Type': 'text/html'
 		})
-		res.write(`<meta http-equiv="refresh" content="5"><p>${roundtripCount} roundtrips</p><img src="/image.png">`)
+		res.write(getIndexHtml())
 		res.end()
 	} else if (req.method === 'GET' && url.pathname === '/image.png') {
 		fs.readFile(outputFile, (err, data) => {
@@ -104,6 +89,7 @@ socket.bind(port)
 
 if (inputFile) {
 	const imageData = readPng(inputFile)
+	// writePng(imageData)
 	sendPng(imageData)
 }
 

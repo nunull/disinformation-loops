@@ -1,0 +1,17 @@
+{
+	"CHUNK_SIZE": 1021,
+	"TIMEOUT": 1,
+	"DONE_TIMEOUT": 2000,
+
+	"a": {
+		"ADDRESS": "localhost",
+		"PORT": 2223,
+		"CONTROL_PORT": 8081
+	},
+	"b": {
+		"ADDRESS": "localhost",
+		"PORT": 2222,
+		"CONTROL_PORT": 8080,
+		"INPUT_FILE": "data/photo.png"
+	}
+}
