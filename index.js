@@ -64,6 +64,8 @@ const controlServer = http.createServer((req, res) => {
 		})
 	} else if (req.method === 'POST' && url.pathname === '/done') {
 		handleDone()
+		res.writeHead(200)
+		res.end()
 	} else if (req.method === 'GET' && url.pathname === '/') {
 		res.writeHead(200, {
 			'Content-Type': 'text/html'
@@ -138,6 +140,7 @@ function sendDone () {
 		const req = http.request(`http://${remoteAddress}:${remoteControlPort}/done`, {
 			method: 'POST'
 		})
+		req.on('error', err => { console.log('error POST /done error', err) })
 		req.end()
 
 		messagesSentCount = 0
@@ -158,6 +161,7 @@ function readPng (file) {
 	const req = http.request(`http://${remoteAddress}:${remoteControlPort}/metadata`, {
 		method: 'POST'
 	})
+	req.on('error', err => { console.log('error POST /done metadata', err) })
 	req.write(JSON.stringify(metadata))
 	req.end()
 
