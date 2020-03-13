@@ -17,6 +17,7 @@ function readConfig (configFile, instanceName) {
 	const config = {
 		port: readConfigValue(c, instanceName, 'PORT'),
 		controlPort: readConfigValue(c, instanceName, 'CONTROL_PORT'),
+		websocketPort: readConfigValue(c, instanceName, 'WEBSOCKET_PORT'),
 		remotePort: readConfigValue(c, otherInstanceName, 'PORT'),
 		remoteControlPort: readConfigValue(c, otherInstanceName, 'CONTROL_PORT'),
 		remoteAddress: readConfigValue(c, otherInstanceName, 'ADDRESS'),
