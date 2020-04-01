@@ -79,6 +79,7 @@ const controlServer = http.createServer((req, res) => {
 
 			config = { ...config, ...newConfig }
 			log('config', config)
+			reset()
 		})
 	} else if (req.method === 'POST' && url.pathname === '/metadata') {
 		readHttpBody(req, (err, body) => {
