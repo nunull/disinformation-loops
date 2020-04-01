@@ -31,9 +31,9 @@ function getIndexHtml () {
 			</head>
 			<body>
 				<center>
-					<p>${roundtripCount} roundtrip${roundtripCount !== 1 ? 's' : ''}</p>
+					<p>${roundtripCount} iteration${roundtripCount !== 1 ? 's' : ''}</p>
 					<img src="/image.png">
-					<p id="message"></p>
+					<p id="message">sending image</p>
 				</center>
 				<script>
 					const ws = new WebSocket('ws://localhost:${websocketPort}')
@@ -65,7 +65,10 @@ function reset () {
 	messagesReceivedCount = 0
 	messagesSentCount = 0
 	roundtripCount = 0
-	handleDone()
+	// handleDone()
+	writePng(buffer)
+	sendToClients('refresh')
+	// sendPng(buffer)
 }
 
 const controlServer = http.createServer((req, res) => {
@@ -140,9 +143,13 @@ if (config.instanceName === 'b') {
 }
 
 if (inputFile) {
-	const imageData = readPng(inputFile)
-	writePng(imageData)
-	sendPng(imageData)
+	log('waiting 2s until starting')
+	setTimeout(() => {
+		log('starting')
+		const imageData = readPng(inputFile)
+		// writePng(imageData)
+		sendPng(imageData)
+	}, 2000)
 }
 
 function sendConfig () {
@@ -199,7 +206,7 @@ function sendDone () {
 		req.end()
 
 		messagesSentCount = 0
-		sendToClients('waiting to receive png')
+		sendToClients('waiting to receive image')
 		log('[control server] done')
 	}, config.doneTimeout)
 }
@@ -227,7 +234,7 @@ function readPng (file) {
 function writePng (imageData) {
 	const image = { ...metadata, data: buffer }
 
-	log('[png] parsing png')
+	log('[png] encoding png')
 	const pngBuffer = png.encode(image)
 
 	log('[png] read %d bytes', pngBuffer.length)
