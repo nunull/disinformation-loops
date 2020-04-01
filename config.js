@@ -6,7 +6,8 @@ function getenv (name, opts = { bool: false, optional: false }) {
 }
 
 function readConfigValue (c, instanceName, key) {
-	return c[instanceName][key] || c[key]
+	const value = getenv(key, { optional: true })
+	return value || c[instanceName][key] || c[key]
 }
 
 function readConfig (configFile, instanceName) {

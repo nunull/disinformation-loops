@@ -1,6 +1,6 @@
 {
-	"CHUNK_SIZE": 1021,
-	"TIMEOUT": 1,
+	"CHUNK_SIZE": 1221,
+	"TIMEOUT": 0,
 	"DONE_TIMEOUT": 200,
 
 	"a": {
@@ -13,7 +13,6 @@
 		"ADDRESS": "localhost",
 		"PORT": 2222,
 		"CONTROL_PORT": 8080,
-		"WEBSOCKET_PORT": 9000,
-		"INPUT_FILE": "data/photo.png"
+		"WEBSOCKET_PORT": 9000
 	}
 }

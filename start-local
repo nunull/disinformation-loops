@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -eo pipefail
+
+if [[ $# != 1 ]]; then
+  echo "Usage: $0 <input file>"
+  exit 1
+fi
+
+INPUT_FILE="$1"
+echo "$INPUT_FILE"
+
+node index.js local.json a &
+INPUT_FILE="$INPUT_FILE" node index.js local.json b
