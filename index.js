@@ -45,21 +45,31 @@ function getIndexHtml () {
 		</html>`
 }
 
+function readHttpBody (req, callback) {
+	let body = []
+	req.on('data', (chunk) => {
+		body.push(chunk)
+	}).on('end', () => {
+		body = Buffer.concat(body).toString()
+		callback(null, body)
+	})
+}
+
 const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
 	console.log('[control server] request %s %s', req.method, url.pathname)
 
+	// if (req.method === 'POST' && url.pathname === '/config') {
+	// 	readHttpBody(req, (err, body) => {
+	//
+	// 	})
+	// } else
 	if (req.method === 'POST' && url.pathname === '/metadata') {
-		let body = []
-		req.on('data', (chunk) => {
-			body.push(chunk)
-		}).on('end', () => {
-			body = Buffer.concat(body).toString()
-
+		readHttpBody(req, (err, body) => {
 			metadata = JSON.parse(body)
 			console.log('[control server] received metadata', metadata)
-		  
-		  	res.writeHead(200)
+
+			res.writeHead(200)
 			res.end()
 		})
 	} else if (req.method === 'POST' && url.pathname === '/done') {
@@ -156,7 +166,7 @@ function sendDone () {
 		messagesSentCount = 0
 		sendToClients('waiting to receive png')
 		console.log('[control server] done')
-	}, doneTimeout)	
+	}, doneTimeout)
 }
 
 function readPng (file) {
