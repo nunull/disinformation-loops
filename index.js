@@ -17,8 +17,8 @@ let messagesSentCount = 0
 let roundtripCount = 0
 let metadata
 
-function log (...params) {
-	console.log(`[${config.instanceName}]`, ...params)
+function log (message, ...params) {
+	console.log(`[${config.instanceName}] ${message}`, ...params)
 }
 
 function getIndexHtml () {
