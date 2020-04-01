@@ -206,7 +206,7 @@ function sendDone () {
 		req.end()
 
 		messagesSentCount = 0
-		sendToClients('waiting to receive image')
+		sendToClients('receiving image')
 		log('[control server] done')
 	}, config.doneTimeout)
 }
