@@ -3,8 +3,9 @@ const http = require('http')
 const fs = require('fs')
 const png = require('@vivaxy/png')
 const WebSocket = require('ws')
+let config = require('./config')
 const { port, controlPort, websocketPort, remotePort, remoteControlPort, remoteAddress, sendOrdered,
-	throttleTimeout, doneTimeout, chunkSize, inputFile, debug } = require('./config')
+	inputFile, debug } = config
 
 const outputFile = 'data/result.png'
 
@@ -15,6 +16,10 @@ let messagesReceivedCount = 0
 let messagesSentCount = 0
 let roundtripCount = 0
 let metadata
+
+function log (...params) {
+	console.log(`[${config.instanceName}]`, ...params)
+}
 
 function getIndexHtml () {
 	return `<!DOCTYPE html>
@@ -28,12 +33,12 @@ function getIndexHtml () {
 				<center>
 					<p>${roundtripCount} roundtrip${roundtripCount !== 1 ? 's' : ''}</p>
 					<img src="/image.png">
-					<p id="message">sending png</p>
+					<p id="message"></p>
 				</center>
 				<script>
 					const ws = new WebSocket('ws://localhost:${websocketPort}')
 					ws.addEventListener('message', event => {
-						console.log('received', event.data)
+						log('received', event.data)
 						if (event.data === 'refresh') {
 							location.reload()
 						} else {
@@ -55,19 +60,30 @@ function readHttpBody (req, callback) {
 	})
 }
 
+function reset () {
+	buffer = Buffer.alloc(0)
+	messagesReceivedCount = 0
+	messagesSentCount = 0
+	roundtripCount = 0
+	handleDone()
+}
+
 const controlServer = http.createServer((req, res) => {
 	const url = new URL(req.url, `http://${req.headers.host}`)
-	console.log('[control server] request %s %s', req.method, url.pathname)
+	log('[control server] request %s %s', req.method, url.pathname)
 
-	// if (req.method === 'POST' && url.pathname === '/config') {
-	// 	readHttpBody(req, (err, body) => {
-	//
-	// 	})
-	// } else
-	if (req.method === 'POST' && url.pathname === '/metadata') {
+	if (req.method === 'POST' && url.pathname === '/config') {
+		readHttpBody(req, (err, body) => {
+			let newConfig = JSON.parse(body)
+			log('[control server] received new config', newConfig)
+
+			config = { ...config, ...newConfig }
+			log('config', config)
+		})
+	} else if (req.method === 'POST' && url.pathname === '/metadata') {
 		readHttpBody(req, (err, body) => {
 			metadata = JSON.parse(body)
-			console.log('[control server] received metadata', metadata)
+			log('[control server] received metadata', metadata)
 
 			res.writeHead(200)
 			res.end()
@@ -87,7 +103,7 @@ const controlServer = http.createServer((req, res) => {
 			if (err) {
 				res.writeHead(404)
 				res.end()
-				console.log('[control server] error reading %s', outputFile)
+				log('[control server] error reading %s', outputFile)
 				return
 			}
 
@@ -99,39 +115,57 @@ const controlServer = http.createServer((req, res) => {
 })
 
 controlServer.listen(controlPort, () => {
-	console.log('[control server] listening on %s', controlPort)
-	console.log('[control server] visit http://localhost:%s', controlPort)
+	log('[control server] listening on %s', controlPort)
+	log('[control server] visit http://localhost:%s', controlPort)
 })
 
 const websocket = new WebSocket.Server({ port: websocketPort })
 
 websocket.on('connection', ws => {
-	console.log('[websocket] client connected')
+	log('[websocket] client connected')
 })
 
 socket.on('message', (msg, info) => { handleChunk(msg) })
-socket.on('listening', () => { console.log('[udp socket] listening on %s', port) })
-socket.on('close', () => { console.log('[udp socket] socket closed') })
+socket.on('listening', () => { log('[udp socket] listening on %s', port) })
+socket.on('close', () => { log('[udp socket] socket closed') })
 socket.on('error', err => {
-	console.log('[udp socket] error', err)
+	log('[udp socket] error', err)
 	socket.close()
 })
 socket.bind(port)
 
+if (config.instanceName === 'b') {
+	sendConfig()
+}
+
 if (inputFile) {
 	const imageData = readPng(inputFile)
-	// writePng(imageData)
+	writePng(imageData)
 	sendPng(imageData)
+}
+
+function sendConfig () {
+	log('[control server] sending config to %s:%d', remoteAddress, remoteControlPort)
+	const req = http.request(`http://${remoteAddress}:${remoteControlPort}/config`, {
+		method: 'POST'
+	})
+	req.on('error', err => { log('[control server] error POST /config', err) })
+	req.write(JSON.stringify({
+		chunkSize: config.chunkSize,
+		doneTimeout: config.doneTimeout,
+		throttleTimeout: config.throttleTimeout
+	}))
+	req.end()
 }
 
 function handleChunk (chunk) {
 	messagesReceivedCount += 1
-	if (debug) console.log('[udp socket] received %d chunks', messagesReceivedCount)
+	if (debug) log('[udp socket] received %d chunks', messagesReceivedCount)
 	buffer = Buffer.concat([buffer, chunk])
 }
 
 function handleDone () {
-	console.log('done')
+	log('done')
 
 	writePng(buffer)
 	sendToClients('refresh')
@@ -143,16 +177,16 @@ function handleDone () {
 
 function sendChunk (chunk, callback) {
 	socket.send(chunk, remotePort, remoteAddress, err => {
-		if (err) console.log('[udp socket] send chunk error', err)
+		if (err) log('[udp socket] send chunk error', err)
 		if (callback) callback(err)
 	})
 
 	messagesSentCount += 1
-	if (debug) console.log('[udp socket] sent %d chunks', messagesSentCount)
+	if (debug) log('[udp socket] sent %d chunks', messagesSentCount)
 }
 
 function sendDone () {
-	console.log('[control server] waiting %d ms to send done', doneTimeout)
+	log('[control server] waiting %d ms to send done', config.doneTimeout)
 
 	sendToClients('')
 
@@ -160,17 +194,17 @@ function sendDone () {
 		const req = http.request(`http://${remoteAddress}:${remoteControlPort}/done`, {
 			method: 'POST'
 		})
-		req.on('error', err => { console.log('[control server] error POST /done error', err) })
+		req.on('error', err => { log('[control server] error POST /done error', err) })
 		req.end()
 
 		messagesSentCount = 0
 		sendToClients('waiting to receive png')
-		console.log('[control server] done')
-	}, doneTimeout)
+		log('[control server] done')
+	}, config.doneTimeout)
 }
 
 function readPng (file) {
-	console.log('[png] reading png', file)
+	log('[png] reading png', file)
 
 	const pngBuffer = fs.readFileSync(file)
 	const image = png.decode(pngBuffer)
@@ -178,11 +212,11 @@ function readPng (file) {
 	metadata = { ...image }
 	delete metadata.data
 
-	console.log('[control server] sending metadata to %s:%d', remoteAddress, remoteControlPort)
+	log('[control server] sending metadata to %s:%d', remoteAddress, remoteControlPort)
 	const req = http.request(`http://${remoteAddress}:${remoteControlPort}/metadata`, {
 		method: 'POST'
 	})
-	req.on('error', err => { console.log('[control server] error POST /done metadata', err) })
+	req.on('error', err => { log('[control server] error POST /metadata error', err) })
 	req.write(JSON.stringify(metadata))
 	req.end()
 
@@ -192,23 +226,23 @@ function readPng (file) {
 function writePng (imageData) {
 	const image = { ...metadata, data: buffer }
 
-	console.log('[png] parsing png')
+	log('[png] parsing png')
 	const pngBuffer = png.encode(image)
 
-	console.log('[png] read %d bytes', pngBuffer.length)
+	log('[png] read %d bytes', pngBuffer.length)
 
-	console.log('[png] writing %s', outputFile)
+	log('[png] writing %s', outputFile)
 	fs.writeFileSync(outputFile, pngBuffer)
 
 	roundtripCount += 1
 }
 
 function sendPng (imageData) {
-	console.log('[udp socket] sending %d bytes in %d chunks', imageData.length, imageData.length / chunkSize)
+	log('[udp socket] sending %d bytes in %d chunks', imageData.length, imageData.length / config.chunkSize)
 
 	if (sendOrdered) {
 		sendPngOrdered(imageData)
-	} else if (throttleTimeout) {
+	} else if (config.throttleTimeout) {
 		sendPngThrottled(imageData)
 	} else {
 		sendPngSimple(imageData)
@@ -216,8 +250,8 @@ function sendPng (imageData) {
 }
 
 function sendPngSimple (imageData) {
-	for (let i = 0; i < imageData.length; i += chunkSize) {
-		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
+	for (let i = 0; i < imageData.length; i += config.chunkSize) {
+		const chunk = Buffer.from(imageData.slice(i, i + config.chunkSize))
 		sendChunk(chunk)
 	}
 
@@ -225,7 +259,7 @@ function sendPngSimple (imageData) {
 }
 
 function sendPngThrottled (imageData) {
-	console.log('[udp socket] sending png in throttled chunks')
+	log('[udp socket] sending png in throttled chunks')
 
 	sendNextChunk(0)
 
@@ -234,17 +268,17 @@ function sendPngThrottled (imageData) {
 			return sendDone()
 		}
 
-		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
+		const chunk = Buffer.from(imageData.slice(i, i + config.chunkSize))
 		sendChunk(chunk)
 
 		setTimeout(() => {
-			sendNextChunk(i + chunkSize)
-		}, throttleTimeout)
+			sendNextChunk(i + config.chunkSize)
+		}, config.throttleTimeout)
 	}
 }
 
 function sendPngOrdered (imageData) {
-	console.log('[udp socket] sending png in ordered chunks')
+	log('[udp socket] sending png in ordered chunks')
 
 	sendNextChunk(0)
 
@@ -253,20 +287,20 @@ function sendPngOrdered (imageData) {
 			return sendDone()
 		}
 
-		const chunk = Buffer.from(imageData.slice(i, i + chunkSize))
+		const chunk = Buffer.from(imageData.slice(i, i + config.chunkSize))
 		sendChunk(chunk, err => {
 			if (err) {
-				console.log('[udp socket] error', i, err)
+				log('[udp socket] error', i, err)
 				sendNextChunk(i)
 			}
 
-			sendNextChunk(i + chunkSize)
+			sendNextChunk(i + config.chunkSize)
 		})
 	}
 }
 
 function sendToClients (data) {
-	console.log('[websocket] sending "%s"', data)
+	log('[websocket] sending "%s"', data)
 	websocket.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(data)

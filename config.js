@@ -16,6 +16,8 @@ function readConfig (configFile, instanceName) {
 	const otherInstanceName = instanceName === 'a' ? 'b' : 'a'
 
 	const config = {
+		instanceName,
+
 		port: readConfigValue(c, instanceName, 'PORT'),
 		controlPort: readConfigValue(c, instanceName, 'CONTROL_PORT'),
 		websocketPort: readConfigValue(c, instanceName, 'WEBSOCKET_PORT'),
@@ -31,7 +33,7 @@ function readConfig (configFile, instanceName) {
 		debug: getenv('DEBUG', { bool: true })
 	}
 
-	console.log('config', config)
+	console.log(`[${instanceName}]`, 'config', config)
 
 	return config
 }
