@@ -38,7 +38,7 @@ function getIndexHtml () {
 				<script>
 					const ws = new WebSocket('ws://localhost:${websocketPort}')
 					ws.addEventListener('message', event => {
-						log('received', event.data)
+						console.log('received', event.data)
 						if (event.data === 'refresh') {
 							location.reload()
 						} else {
@@ -302,9 +302,11 @@ function sendPngOrdered (imageData) {
 
 function sendToClients (data) {
 	log('[websocket] sending "%s"', data)
+
 	websocket.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(data)
-      }
-    })
+		log('[websocket] client %s', client)
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data)
+    }
+  })
 }
