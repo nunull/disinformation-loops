@@ -81,7 +81,7 @@ if (inputFile) {
 		controlClient.sendMetadata(metadata)
 
 		// TODO
-		// writePng(imageData)
+		writePng(image)
 		sendPng(image.data, () => {
 			sendDone()
 		})
