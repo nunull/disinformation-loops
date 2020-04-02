@@ -1,3 +1,5 @@
+const uuid = require('uuid').v4
+
 function getenv (name, opts = { bool: false, optional: false }) {
 	const value = process.env[name]
 	if (opts.bool) return value === '1' || value === 'true'
@@ -18,7 +20,7 @@ function readConfig (configFile, instanceName) {
 	const config = {
 		instanceName,
 
-		outputFile: 'data/result.png',
+		outputFile: `data/${uuid()}.png`,
 		startupTimeout: 2000,
 
 		port: readConfigValue(c, instanceName, 'PORT'),

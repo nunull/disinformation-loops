@@ -1,6 +1,4 @@
 let config = require('./config')
-const { port, controlPort, websocketPort, remotePort, remoteControlPort, remoteAddress,
-	inputFile } = config
 
 const controlClient = require('./lib/controlClient')
 const controlServer = require('./lib/controlServer')
@@ -8,20 +6,21 @@ const log = require('./lib/log')('index')
 const png = require('./lib/png')
 const sendPng = require('./lib/sendPng')
 const socket = require('./lib/socket')
+const state = require('./lib/state')
 const websocketServer = require('./lib/websocketServer')
 
-let buffer = Buffer.alloc(0)
-let messagesReceivedCount = 0
-let roundtripCount = 0
-let metadata
+// const state = {
+// 	buffer: Buffer.alloc(0),
+// 	iterationCount: 0,
+// 	metadata: null
+// }
 
 function reset () {
-	buffer = Buffer.alloc(0)
-	messagesReceivedCount = 0
-	roundtripCount = 0
+	state.buffer = Buffer.alloc(0)
+	state.iterationCount = 0
 
 	// handleDone()
-	png.writePng({ ...metadata, data: buffer })
+	png.writePng({ ...state.metadata, data: state.buffer })
 	websocketServer.broadcast('refresh')
 	// sendPng(buffer)
 }
@@ -29,35 +28,44 @@ function reset () {
 controlServer.on('config', newConfig => {
 	log.info(`received new config: ${newConfig}`)
 
-	config = { ...config, ...newConfig }
-	log.info(`config: ${config}`)
+	// TODO does this propagate to other modules?
+	for (const key in newConfig) {
+		config[key] = newConfig[key]
+	}
+
+	log.info(`config: ${JSON.stringify(config)}`)
 	reset()
 })
 
 controlServer.on('metadata', newMetadata => {
-	log.info(`received new metadata: ${newMetadata}`)
+	log.info(`received new metadata: ${JSON.stringify(newMetadata)}`)
 
-	metadata = newMetadata
+	state.metadata = newMetadata
 })
 
 controlServer.on('done', () => {
 	log.info('done')
 
-	png.writePng({ ...metadata, data: buffer })
-	roundtripCount += 1
+	png.writePng({ ...state.metadata, data: state.buffer })
+
+	state.iterationCount += 1
+
 	websocketServer.broadcast('refresh')
-	sendPng(buffer, () => {
+	// this is delaying just for visual reasons
+	setTimeout(() => {
+		websocketServer.broadcast('sending image')
+	}, 500)
+
+	sendPng(state.buffer, () => {
 		sendDone()
 	})
 
-	messagesReceivedCount = 0
-	buffer = Buffer.alloc(0)
-
+	state.buffer = Buffer.alloc(0)
 })
 
 socket.on('message', chunk => {
-	messagesReceivedCount += 1
-	buffer = Buffer.concat([buffer, chunk])
+	if (!state.buffer) console.log('BUFFER', state, state.buffer)
+	state.buffer = Buffer.concat([state.buffer, chunk])
 })
 
 if (config.instanceName === 'b') {
@@ -68,20 +76,20 @@ if (config.instanceName === 'b') {
 	})
 }
 
-if (inputFile) {
+if (config.inputFile) {
 	log.info(`waiting ${config.startupTimeout} ms until starting`)
 	setTimeout(() => {
 		log.info('starting')
 
-		const image = png.readPng(inputFile)
+		const image = png.readPng(config.inputFile)
 
-		metadata = { ...image }
-		delete metadata.data
+		state.metadata = { ...image }
+		delete state.metadata.data
 
-		controlClient.sendMetadata(metadata)
+		controlClient.sendMetadata(state.metadata)
 
 		// TODO
-		writePng(image)
+		png.writePng(image)
 		sendPng(image.data, () => {
 			sendDone()
 		})
