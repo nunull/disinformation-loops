@@ -18,6 +18,9 @@ function readConfig (configFile, instanceName) {
 	const config = {
 		instanceName,
 
+		outputFile: 'data/result.png',
+		startupTimeout: 2000,
+
 		port: readConfigValue(c, instanceName, 'PORT'),
 		controlPort: readConfigValue(c, instanceName, 'CONTROL_PORT'),
 		websocketPort: readConfigValue(c, instanceName, 'WEBSOCKET_PORT'),
@@ -28,9 +31,7 @@ function readConfig (configFile, instanceName) {
 		throttleTimeout: readConfigValue(c, instanceName, 'TIMEOUT'),
 		doneTimeout: readConfigValue(c, instanceName, 'DONE_TIMEOUT'),
 		chunkSize: parseInt(readConfigValue(c, instanceName, 'CHUNK_SIZE')),
-		inputFile: readConfigValue(c, instanceName, 'INPUT_FILE'),
-
-		debug: getenv('DEBUG', { bool: true })
+		inputFile: readConfigValue(c, instanceName, 'INPUT_FILE')
 	}
 
 	console.log(`[${instanceName}]`, 'config', config)
