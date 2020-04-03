@@ -9,7 +9,7 @@
     <center>
       <p>{{iterationCount}} iteration(s)</p>
       <img src="/image.png">
-      <p id="message"></p>
+      <p id="message">{{currentMessage}}</p>
     </center>
     <script>
       const ws = new WebSocket('ws://localhost:{{websocketPort}}')

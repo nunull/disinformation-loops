@@ -1,6 +1,6 @@
 {
 	"CHUNK_SIZE": 621,
-	"TIMEOUT": 1,
+	"TIMEOUT": 0,
 	"DONE_TIMEOUT": 2000,
 
 	"a": {

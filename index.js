@@ -9,24 +9,8 @@ const socket = require('./lib/socket')
 const state = require('./lib/state')
 const websocketServer = require('./lib/websocketServer')
 
-// const state = {
-// 	buffer: Buffer.alloc(0),
-// 	iterationCount: 0,
-// 	metadata: null
-// }
-
-function reset () {
-	state.buffer = Buffer.alloc(0)
-	state.iterationCount = 0
-
-	// handleDone()
-	png.writePng({ ...state.metadata, data: state.buffer })
-	websocketServer.broadcast('refresh')
-	// sendPng(buffer)
-}
-
-controlServer.on('config', newConfig => {
-	log.info(`received new config: ${newConfig}`)
+controlServer.on('config', async newConfig => {
+	log.info(`received new config: ${JSON.stringify(newConfig)}`)
 
 	// TODO does this propagate to other modules?
 	for (const key in newConfig) {
@@ -34,7 +18,7 @@ controlServer.on('config', newConfig => {
 	}
 
 	log.info(`config: ${JSON.stringify(config)}`)
-	reset()
+	await reset()
 })
 
 controlServer.on('metadata', newMetadata => {
@@ -43,23 +27,12 @@ controlServer.on('metadata', newMetadata => {
 	state.metadata = newMetadata
 })
 
-controlServer.on('done', () => {
+controlServer.on('done', async () => {
 	log.info('done')
 
-	png.writePng({ ...state.metadata, data: state.buffer })
-
+	await png.writePng({ ...state.metadata, data: state.buffer })
 	state.iterationCount += 1
-
-	websocketServer.broadcast('refresh')
-	// this is delaying just for visual reasons
-	setTimeout(() => {
-		websocketServer.broadcast('sending image')
-	}, 500)
-
-	sendPng(state.buffer, () => {
-		sendDone()
-	})
-
+	await sendImage()
 	state.buffer = Buffer.alloc(0)
 })
 
@@ -68,43 +41,77 @@ socket.on('message', chunk => {
 	state.buffer = Buffer.concat([state.buffer, chunk])
 })
 
-if (config.instanceName === 'b') {
-	controlClient.sendConfig({
-		chunkSize: config.chunkSize,
-		doneTimeout: config.doneTimeout,
-		throttleTimeout: config.throttleTimeout
-	})
-}
+main().catch(err => log.info(`err in main: ${err}`))
 
-if (config.inputFile) {
-	log.info(`waiting ${config.startupTimeout} ms until starting`)
-	setTimeout(() => {
+async function main () {
+	if (config.instanceName === 'b') {
+		if (!config.inputFile) throw Error('INPUT_FILE not set')
+
 		log.info('starting')
 
-		const image = png.readPng(config.inputFile)
+		await controlClient.sendConfig({
+			chunkSize: config.chunkSize,
+			doneTimeout: config.doneTimeout,
+			throttleTimeout: config.throttleTimeout,
+			sendOrdered: config.sendOrdered
+		})
 
+		const image = await png.readPng(config.inputFile)
+		await png.writePng(image)
+
+		state.buffer = Buffer.from(image.data)
 		state.metadata = { ...image }
 		delete state.metadata.data
 
-		controlClient.sendMetadata(state.metadata)
+		await controlClient.sendMetadata(state.metadata)
+		await timeout(2000)
 
-		// TODO
-		png.writePng(image)
-		sendPng(image.data, () => {
-			sendDone()
-		})
-	}, config.startupTimeout)
+		await sendImage()
+	}
 }
 
-function sendDone () {
+async function reset () {
+	state.buffer = Buffer.alloc(0)
+	state.iterationCount = 0
+
+	// handleDone()
+	await png.writePng({ ...state.metadata, data: state.buffer })
+	state.currentMessage = ''
+	websocketServer.broadcast('refresh')
+	// sendPng(buffer)
+}
+
+async function sendImage () {
+	state.currentMessage = ''
+	websocketServer.broadcast('refresh')
+
+	// this is delaying just for visual reasons
+	// TODO this is a problem if the image is sent faster than 500 ms
+	setTimeout(() => {
+		state.currentMessage = 'sending image'
+		websocketServer.broadcast(state.currentMessage)
+	}, 500)
+
+	await sendPng(state.buffer)
+	await sendDone()
+}
+
+async function sendDone () {
 	log.info(`waiting ${config.doneTimeout} ms to send done`)
 
-	websocketServer.broadcast('')
+	state.currentMessage = ''
+	websocketServer.broadcast(state.currentMessage)
 
-	setTimeout(() => {
-		controlClient.sendDone()
+	await timeout(config.doneTimeout)
+	await controlClient.sendDone()
 
-		websocketServer.broadcast('waiting to receive image')
-		log.info('done sent')
-	}, config.doneTimeout)
+	state.currentMessage = 'waiting to receive image'
+	websocketServer.broadcast(state.currentMessage)
+	log.info('done sent')
+}
+
+function timeout (timeout) {
+	return new Promise((resolve, reject) => {
+		setTimeout(resolve, timeout)
+	})
 }

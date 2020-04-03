@@ -21,7 +21,6 @@ function readConfig (configFile, instanceName) {
 		instanceName,
 
 		outputFile: `data/${uuid()}.png`,
-		startupTimeout: 2000,
 
 		port: readConfigValue(c, instanceName, 'PORT'),
 		controlPort: readConfigValue(c, instanceName, 'CONTROL_PORT'),
