@@ -112,7 +112,7 @@ async function sendDone () {
 		log.info(`new throttle timeout ${config.throttleTimeout} ms`)
 	}
 
-	state.currentMessage = 'waiting to receive image'
+	state.currentMessage = 'receiving image'
 	websocketServer.broadcast(state.currentMessage)
 	log.info('done sent')
 }
