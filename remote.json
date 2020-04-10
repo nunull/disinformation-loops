@@ -1,7 +1,7 @@
 {
 	"CHUNK_SIZE": 621,
-	"TIMEOUT": 30,
-	"TIMEOUT_STEP": 3,
+	"TIMEOUT": 25,
+	"TIMEOUT_STEP": 5,
 	"DONE_TIMEOUT": 5000,
 
 	"a": {
