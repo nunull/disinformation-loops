@@ -31,6 +31,7 @@ function readConfig (configFile, instanceName) {
 		remoteAddress: readConfigValue(c, otherInstanceName, 'ADDRESS'),
 		sendOrdered: readConfigValue(c, instanceName, 'SEND_ORDERED'),
 		throttleTimeout: readConfigValue(c, instanceName, 'TIMEOUT'),
+		throttleTimeoutStep: readConfigValue(c, instanceName, 'TIMEOUT_STEP'),
 		doneTimeout: readConfigValue(c, instanceName, 'DONE_TIMEOUT'),
 		chunkSize: parseInt(readConfigValue(c, instanceName, 'CHUNK_SIZE')),
 		inputFile: readConfigValue(c, instanceName, 'INPUT_FILE')

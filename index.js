@@ -52,6 +52,7 @@ async function main () {
 			chunkSize: config.chunkSize,
 			doneTimeout: config.doneTimeout,
 			throttleTimeout: config.throttleTimeout,
+			throttleTimeoutStep: config.throttleTimeoutStep,
 			sendOrdered: config.sendOrdered
 		})
 
@@ -106,7 +107,7 @@ async function sendDone () {
 	await controlClient.sendDone()
 
 	if (config.throttleTimeout) {
-		log.info(`decreasing throttle timeout from ${config.throttleTimeout} ms`)
+		log.info(`decreasing throttle timeout by ${config.throttleTimeoutStep} from ${config.throttleTimeout} ms`)
 		config.throttleTimeout = config.throttleTimeout - 0.5
 		log.info(`new throttle timeout ${config.throttleTimeout} ms`)
 	}
