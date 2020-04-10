@@ -108,7 +108,7 @@ async function sendDone () {
 
 	if (config.throttleTimeout) {
 		log.info(`decreasing throttle timeout by ${config.throttleTimeoutStep} from ${config.throttleTimeout} ms`)
-		config.throttleTimeout = config.throttleTimeout - config.throttleTimeoutStep
+		config.throttleTimeout = Math.max(0, config.throttleTimeout - config.throttleTimeoutStep)
 		log.info(`new throttle timeout ${config.throttleTimeout} ms`)
 	}
 
