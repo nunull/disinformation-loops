@@ -37,7 +37,6 @@ controlServer.on('done', async () => {
 })
 
 socket.on('message', chunk => {
-	if (!state.buffer) console.log('BUFFER', state, state.buffer)
 	state.buffer = Buffer.concat([state.buffer, chunk])
 })
 
@@ -64,7 +63,9 @@ async function main () {
 		delete state.metadata.data
 
 		await controlClient.sendMetadata(state.metadata)
-		await timeout(2000)
+
+		log.info(`waiting ${config.startupTimeout} ms until sending the first image`)
+		await timeout(config.startupTimeout)
 
 		await sendImage()
 	}
@@ -97,11 +98,11 @@ async function sendImage () {
 }
 
 async function sendDone () {
-	log.info(`waiting ${config.doneTimeout} ms to send done`)
 
 	state.currentMessage = ''
 	websocketServer.broadcast(state.currentMessage)
 
+	log.info(`waiting ${config.doneTimeout} ms to send done`)
 	await timeout(config.doneTimeout)
 	await controlClient.sendDone()
 
